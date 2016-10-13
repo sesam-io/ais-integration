@@ -29,14 +29,16 @@ stream of.. something. The data looked like this:
   !BSVDM,2,1,1,A,53mN1J400000hluB2218E<=DF0T@5:1Di=@DTr0k0p?154rdR2fLMevMeN88,0*73
   !BSVDM,2,2,1,A,88888888880,2*3C
 
-A quick bit of googling revelead this to indeed be data in AIS (IEC 62320-1) format. There is an excellent discussion on the format in more practical terms
+A quick bit of googling revealed this to indeed be data in AIS (IEC 62320-1) format. There is an excellent discussion on the format in more practical terms
 written by Eric S. Raymond here: http://catb.org/gpsd/AIVDM.html
 
-"Cool!" I thought, and immedeately wanted to see if I could get this into Sesam and do something useful with the data. How hard could it be?
+"Cool!" I thought, and immediately wanted to see if I could get this into Sesam and do something useful with the data. How hard could it be?
 The inital goal I set was to be able to read the AIS data into Sesam, extract ship information and their position over time. I also wanted to
 be able to extract this information into a Elasticsearch index so I could do geographical queries on the data (i.e. "Which ships are within
-a certain radius of this point?"). I also wanted to be able to do more "human" queries so I could query like "which ships are near Bergen at the moment?".
-I already had a dataset of places with lat lon coordinates from another source (http://www.erikbolstad.no/geo/noreg/postnummer), so why not give it shot?
+a certain radius of this point?"). I already had another dataset of places with lat lon coordinates from another source (http://www.erikbolstad.no/geo/noreg/postnummer),
+so for good measure, I also wanted to be able to do more "human" queries so I could query like "which ships are near Bergen at the moment?".
+
+So why not give it a quick shot? First order of the day; what exactly is this AIS stuff?
 
 AIS in a nutshell
 =================

@@ -20,7 +20,7 @@ Synopsis
 Running in Docker
 -----------------
 
-Build the docker image with ``docker build`` in the main directory.
+Build the docker image with ``docker -t ais-service build .`` in the main directory.
 
 To run:
 
