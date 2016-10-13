@@ -36,13 +36,13 @@ written by Eric S. Raymond here: http://catb.org/gpsd/AIVDM.html
 The inital goal I set was to be able to read the AIS data into Sesam, extract ship information and their position over time. I also wanted to
 be able to extract this information into a Elasticsearch index so I could do geographical queries on the data (i.e. "Which ships are within
 a certain radius of this point?"). I also wanted to be able to do more "human" queries so I could query like "which ships are near Bergen at the moment?".
-I already had a dataset of places with lat lon coordinates from another source (http://www.erikbolstad.no/geo/noreg/postnummer), so lets give it a shot! 
+I already had a dataset of places with lat lon coordinates from another source (http://www.erikbolstad.no/geo/noreg/postnummer), so why not give it shot?
 
 AIS in a nutshell
 =================
 
-AIS stands for Automatic Identification System, and is an automatic tracking system used on marine vesseks such as ships, static equipment (such as buoys) but also things like search-and-rescue planes.
-Ships with AIS capable equipment can exchange electronic messages over various over-the-horizon channels (radio, VHF/U-VHF etc) that other ships and sensors can read, decode and rebroadcast.
+AIS stands for Automatic Identification System, and is an automatic tracking system used on marine vessels such as ships, static equipment (such as buoys) but also things like search-and-rescue planes.
+Ships with AIS capable equipment can exchange electronic messages over various over-the-horizon channels (radio, VHF/U-VHF etc) that other ships and sensors can read, decode and/or rebroadcast.
 Sensors can be stationary AIS base stations, other ships or even satellites. AIS messages contain information such as unique identification, position, destination, status, name, course, and speed.
 
 Norway has a network of 50 AIS base stations along the coast of Norway and two satellites in polar orbit (AISSat-1 and AISSat-2) that also captures this traffic.
@@ -54,19 +54,19 @@ search-and-rescue services, port planning and so on. See https://en.wikipedia.or
 Reading AIS data into Sesam
 ===========================
 
-To be able to process AIS data in Sesam, we first need to transform the raw form of the messages into something Sesam can understand.
-Sesam's native data dialect is json, so we need to create a microservice that can read the AIS stream and post this in json form to a Sesam
+To be able to process AIS data in Sesam, I first needed to transform the raw form of the messages into something Sesam can understand.
+Sesam's native data dialect is JSON, so I had to create a microservice that can read the AIS stream and post this in JSON form to a Sesam
 endpoint. I've created a github repo at https://github.com/sesam-io/ais-integration that you can clone to get it up and running.
 
 Sesam HTTP receiver endpoint
 ----------------------------
 
-Note that I assume you have access to a Sesam instance somewhere, and that its reachable via a http://<sesamservice>:port url.
+Note that I assume you have access to a Sesam instance somewhere, and that its reachable via a http://sesamservice:port url.
 
 The "complete" Sesam configuration can be found in the subfolder ``sesam-config``. I will include snippets of this config along the way to
 explain what's going on.
 
-Before we can start posting any data into Sesam, we need to set ut a HTTP endpoint pipe so we can insert the data into a Sesam dataset:
+Before you can start pushing data into Sesam, you will need to set ut a HTTP endpoint pipe connected to a dataset:
 
 ::
 
@@ -79,7 +79,7 @@ Before we can start posting any data into Sesam, we need to set ut a HTTP endpoi
     }
 
 
-This pipe will set up a JSON receiver endpoint so we can use HTTP ``POST`` operations: http://<sesamservice>:port/api/receivers/ais_data/entitites
+This pipe will set up a JSON receiver endpoint so we can use HTTP ``POST`` operations: http://sesamservice:port/api/receivers/ais_data/entitites
 
 The AIS microservice
 --------------------
@@ -108,7 +108,7 @@ We can then read messages off this stream in a loop:
 
 Note that this loop will not end until the socker closes. The data is a live stream, so that means basically never.
 
-The native format of ``libais`` deviates a bit in naming from the property names documented in http://catb.org/gpsd/AIVDM.html so we use a function to convert it to a more familiar ``gpsd`` format (https://en.wikipedia.org/wiki/Gpsd). 
+The native format of ``libais`` deviates a bit in naming from the property names documented in http://catb.org/gpsd/AIVDM.html so we use a function to convert it to a more familiar ``gpsd`` format (https://en.wikipedia.org/wiki/Gpsd).
 
 An example ``message`` object looks like this:
 
@@ -140,9 +140,12 @@ An example ``message`` object looks like this:
   }
 
 There are two properies which are available in all AIS messages; ``mmsi`` and ``type``. The ``mmsi`` property contains a globally unique vessel ID and ``type`` is the kind of AIS message the object
-represents (see http://catb.org/gpsd/AIVDM.html#_ais_payload_interpretation for a full list of type codes). 
+represents (see http://catb.org/gpsd/AIVDM.html#_ais_payload_interpretation for a full list of type codes).
 
-In this article, we will only process two kinds of messages; positional messages of types 1-3 and 18-19, for "class A" and "class B" equipment respectively (see https://en.wikipedia.org/wiki/Automatic_identification_system#Detailed_description:_Class_A_units and https://en.wikipedia.org/wiki/Automatic_identification_system#Detailed_description:_Class_B_units) - and "static" information messages containing ship names and callsigns (types 5 and 24).
+For my purposes, I'm only interested in two kinds of messages; positional messages of types 1-3 and 18-19, for "class A" and "class B" equipment respectively
+(see https://en.wikipedia.org/wiki/Automatic_identification_system#Detailed_description:_Class_A_units and
+https://en.wikipedia.org/wiki/Automatic_identification_system#Detailed_description:_Class_B_units) -
+in addition I'm going to need "static" information messages containing ship names and callsigns (types 5 and 24).
 
 Sesam need an unique identifier in a ``_id`` property when we push JSON to a receiving endpoint. Looking at the structure of these messages, it makes sense to construct this property as a concatenation
 of the ``mmsi`` and ``type`` properties, dropping any message missing either of these (which shouldn't happen in any case unless the message is already garbled):
@@ -158,7 +161,7 @@ of the ``mmsi`` and ``type`` properties, dropping any message missing either of 
       message["_id"] = "%s_%s" % (message["type"], message["mmsi"])
 
 
-We then convert this payload to JSON and post it to the Sesam endpoint:
+This payload must be converted to JSON before it can be POST'ed to the Sesam endpoint:
 
 ::
 
@@ -168,8 +171,9 @@ We then convert this payload to JSON and post it to the Sesam endpoint:
                      data=json_data, verify=False, timeout=3600)
 
 
-Running the service for a few minutes will easily accumulate thousands of AIS messages in the ``ais_data`` dataset. Looking closer at the type ``24`` messages in the dataset,
-it looks like these are getting updated very often. Using the Sesam GUI to diff the current version with the previous version reveals that it's flip-flopping between versions
+Running the service for a few minutes will easily accumulate thousands of AIS messages in the ``ais_data`` dataset. Awesome!
+Looking closer at the type ``24`` messages in the dataset, I noticed that it looked like these were getting updated very often.
+Using the Sesam GUI to diff the current version with the previous version revealed that it was flip-flopping between versions
 with the ``part_num`` property set to either ``0`` and containing:
 
 ::
@@ -189,7 +193,7 @@ with the ``part_num`` property set to either ``0`` and containing:
 Or a version with ``part_num`` set to ``1`` and containing:
 
 ::
-  
+
   {
     "class": "AIS",
     "to_bow": 0,
@@ -207,10 +211,12 @@ Or a version with ``part_num`` set to ``1`` and containing:
     "to_stern": 0,
     "mmsi": 257389600,
     "part_num": 1
-  } 
+  }
 
-Reading the section for these types of messages in more detail (http://catb.org/gpsd/AIVDM.html#_type_24_static_data_report) explains this weirdness. These types of messages can be multi-part! Or rather
-two-part. So, we need to extend the ``_id`` of these types of messages to include the ``part_num`` field so we don't overwrite the first part:
+So, what's going on? Reading the section for these types of messages in more detail (http://catb.org/gpsd/AIVDM.html#_type_24_static_data_report)
+explained this weirdness. These types of messages turn out to be multi-part! Or rather two-part.
+So, we need to extend the ``_id`` of these types of messages to include the ``part_num``
+field so we don't overwrite the first part!
 
 ::
 
@@ -219,13 +225,14 @@ two-part. So, we need to extend the ``_id`` of these types of messages to includ
     else:
         message["_id"] = "%s_%s" % (message["type"], message["mmsi"])
 
-Stopping the microservice, deleting the dataset in Sesam and then restarting the AIS service again gives us the correct ``_id`` separation and makes sure we have both parts of this type of messages, even if they don't
-come in sequence (or at all). So, now we have AIS messages in Sesam - and in less than an hour of work, including googling+research! Yay!
+Stopping the microservice, deleting the dataset in Sesam and then restarting the AIS service again gave the correct ``_id``
+separation and makes sure we have both parts of this type of messages, even if they don't come in sequence (or at all).
+So, now we have AIS messages in Sesam - and in less than an hour of work, including googling+research! Yay!
 
 Extracting lists of ships
 =========================
 
-We would like to have a list of which ships we've seen in our search index. To do this, we have 
+We would like to have a list of which ships we've seen in our search index. To do this, we have
 
 Adding "human" poisitonal information to AIS positional entities
 ================================================================
