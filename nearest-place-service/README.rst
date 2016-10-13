@@ -33,7 +33,7 @@ Running in Docker
 ::
 
   cd ais-integration/nearest-place-service
-  docker build
+  docker -t nearest-place-service build .
   docker run --name nearest-place-service -p 5001:5001
 
 Get the IP from docker:
