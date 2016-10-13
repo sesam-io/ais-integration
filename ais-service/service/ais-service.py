@@ -42,14 +42,17 @@ def main():
             for msg in ais.stream.decode(f):
                 i += 1
                 message = ais.compatibility.gpsd.mangle(msg)
+
+                if "type" not in message or "mmsi" not in message:
+                    continue
+
                 print("Processing message #%s, type %s" % (i, message.get("type")))
 
                 # # Check for (potential) multi-part message
                 if "part_num" in message:
-                    message["_id"] = str(message.get("type", "??")) + "_" + \
-                                     str(message.get("mmsi", "??")) + "_" + str(message.get("part_num"))
+                    message["_id"] = "%s_%s_%s" % (message["type"], message["mmsi"], message["part_num"])
                 else:
-                    message["_id"] = str(message.get("type", "??")) + "_" + str(message.get("mmsi", "??"))
+                    message["_id"] = "%s_%s" % (message["type"], message["mmsi"])
 
                 post_message(session, options.sesam_url, message)
     finally:

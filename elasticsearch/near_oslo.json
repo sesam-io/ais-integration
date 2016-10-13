@@ -18,7 +18,7 @@
         },
         "filter" : {
             "geo_distance" : {
-                "distance" : "2km",
+                "distance" : "5km",
                 "location" : {
                     "lat" : 59.902006,
                     "lon" : 10.718077
