@@ -1,0 +1,30 @@
+{
+  "sort" : [
+      {
+          "_geo_distance" : {
+              "location" : {
+                    "lat" : 59.902006,
+                    "lon" : 10.718077
+              },
+              "order" : "asc",
+              "unit" : "km"
+          }
+      }
+  ],
+  "query": {
+    "filtered" : {
+        "query" : {
+            "match_all" : {}
+        },
+        "filter" : {
+            "geo_distance" : {
+                "distance" : "2km",
+                "location" : {
+                    "lat" : 59.902006,
+                    "lon" : 10.718077
+                }
+            }
+        }
+    }
+  }
+}

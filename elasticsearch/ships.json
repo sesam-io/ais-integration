@@ -1,0 +1,20 @@
+{
+    "mappings": {
+        "ship": {
+            "properties": {
+                "mmsi": {"type": "integer"},
+                "callsign": {"type": "string"},
+                "shipname": {"type": "string"},
+                "to_stern": {"type": "integer"},
+                "to_bow": {"type": "integer"},
+                "to_starboard": {"type": "integer"},
+                "to_port": {"type": "integer"},
+                "position": {"type": "string"},
+                "when": {"type": "date"},
+                "vendor_id": {"type": "string"},
+                "url": {"type": "string"},
+                "location": {"type": "geo_point"}
+            }
+        }
+    }
+}

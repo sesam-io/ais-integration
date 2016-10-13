@@ -26,4 +26,15 @@ To run:
 
 ::
 
-    docker run -it --rm ais-service ais-service --url http://http://153.44.253.27:5631 --sesam-url http://sesam-ip:sesam-port/api/receivers/your-pipe/entitites
+    docker run -it --rm ais-service ais-service -a 153.44.253.27 -p 5631 --sesam-url http://sesam-ip:sesam-port/api/receivers/your-pipe/entitites
+
+Python example (Sesam assumed to be running on localhost port 9042 in advance):
+
+::
+
+   cd ais-integration/ais-service/service
+   virtualenv --python=python3 venv
+   . venv/bin/activate
+   pip install -r requirements.txt
+
+   python ais-service.py -a 153.44.253.27 -p 5631 http://localhost:9042/api/receivers/ais_data/entities

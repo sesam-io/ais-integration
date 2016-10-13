@@ -1,0 +1,10 @@
+{
+  "query": {
+    "filtered" : {
+        "query" : {
+            "match_all" : {}
+        }
+    }
+  }
+}
+

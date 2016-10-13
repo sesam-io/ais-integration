@@ -173,5 +173,56 @@
             ]
         }
     }]
+  },
+  {
+    "_id": "elasticsearch_index",
+    "type": "system:elasticsearch",
+    "hosts": ["172.17.0.2:9200"]
+  },
+  {
+    "_id": "to_elasticsearch",
+    "type": "pipe",
+    "source": {
+      "type": "dataset",
+      "dataset": "ais_ships_with_location"
+    },
+    "sink": {
+      "type": "elasticsearch",
+      "system": "elasticsearch_index",
+      "default_index": "ships",
+      "default_type": "ship"
+    },
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "Transform to elasticsearch document",
+        "dataset": "ais_ships_with_location",
+        "transforms": {
+            "default": [
+                ["copy", "_id"],
+                ["copy", "mmsi"],
+                ["copy", "to_bow"],
+                ["copy", "to_port"],
+                ["copy", "to_starboard"],
+                ["copy", "to_stern"],
+                ["copy", "vendor_id"],
+                ["copy", "callsign"],
+                ["copy", "shipname"],
+                ["copy", "url"],
+                ["rename", "status_text", "status"],
+                ["rename", "shiptype_text", "shiptype"],
+                ["merge", ["apply", "apply-last-seen", "_S.last-seen-at"]]
+            ],
+            "apply-last-seen": [
+                ["copy", "*"],
+                ["add", "location", ["dict", ["list",
+                                                ["list", "lat", "_S.lat"],
+                                                ["list", "lon", "_S.lon"]]
+                ]],
+                ["remove", "lat"],
+                ["remove", "lon"]
+            ]
+        }
+    }]
   }
 ]
