@@ -1,0 +1,177 @@
+[
+  {
+	"_id": "ais_data",
+	"type": "pipe",
+	"source": {
+		"type": "http_endpoint"
+	}
+  },
+  {
+    "_id": "nearest_place",
+    "type": "system:url",
+    "base_url": "http://localhost:5001"
+  },
+  {
+	"_id": "ais_position_reports",
+	"type": "pipe",
+	"source": {
+		"type": "dataset",
+        "dataset": "ais_data"
+	},
+    "transform": [
+      {
+          "type": "dtl",
+          "name": "Filter out all but position reports (type 1-3 and 18-19)",
+          "dataset": "ais_data",
+          "transforms": {
+              "default": [
+                  ["filter", ["or",
+                               ["eq", "_S.type", 1],
+                               ["eq", "_S.type", 2],
+                               ["eq", "_S.type", 3],
+                               ["eq", "_S.type", 18],
+                               ["eq", "_S.type", 19]]
+                  ],
+                  ["copy", "*"]
+              ]
+          }
+      }]
+  },
+  {
+	"_id": "ais_position_reports_nearest_place",
+	"type": "pipe",
+	"source": {
+		"type": "dataset",
+        "dataset": "ais_position_reports"
+	},
+    "transform": [
+      {
+          "type": "http",
+          "name": "Find out the nearest place of all unique position reports",
+          "system": "nearest_place",
+          "url": "http://localhost:5001/transform"
+      },
+      {
+          "type": "dtl",
+          "name": "Turn nearest place into a string",
+          "dataset": "ais_position_reports",
+          "transforms": {
+              "default": [
+                  ["copy", "*"],
+                  ["add", "position", ["concat", ["list", ["string", ["floor", 1, ["/", "_S.nearest_place.distance", 1000.0]]], " km ", "_S.nearest_place.direction", " of ", "_S.nearest_place.name"]]],
+                  ["add", "when", ["now"]]
+              ]
+          }
+      }
+    ]
+  },
+  {
+	"_id": "ais_static_part_A",
+	"type": "pipe",
+	"source": {
+		"type": "dataset",
+        "dataset": "ais_data"
+	},
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "All unique reported vessel names (type 24), part A",
+        "dataset": "ais_data",
+        "transforms": {
+            "default": [
+                ["filter", ["and",
+                             ["eq", "_S.part_num", 0],
+                             ["eq", "_S.type", 24]
+                           ]
+                ],
+                ["copy", "*"],
+                ["add", "_id", ["string", "_S.mmsi"]]
+            ]
+        }
+    }]
+  },
+  {
+	"_id": "ais_static_part_B",
+	"type": "pipe",
+	"source": {
+		"type": "dataset",
+        "dataset": "ais_data"
+	},
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "All unique reported vessel names (type 24), part B",
+        "dataset": "ais_data",
+        "transforms": {
+            "default": [
+                ["filter", ["and",
+                             ["eq", "_S.part_num", 1],
+                             ["eq", "_S.type", 24]
+                           ]
+                ],
+                ["copy", "*"],
+                ["add", "_id", ["string", "_S.mmsi"]]
+            ]
+        }
+    }]
+  },
+  {
+	"_id": "ais_ships",
+	"type": "pipe",
+	"source": {
+		"type": "merge_datasets",
+        "datasets": ["ais_static_part_A", "ais_static_part_B"],
+        "strategy": "all"
+	},
+    "transform": [
+      {
+        "type": "dtl",
+        "name": "All unique reported vessel names (type 24, merged part A and B)",
+        "transforms": {
+          "default": [
+            ["merge", "_S.ais_static_part_A"],
+            ["merge", "_S.ais_static_part_B"],
+            ["add", "url", ["concat", ["list", "https://www.marinetraffic.com/en/ais/details/ships/", ["string", "_T.mmsi"]]]],
+            ["remove", "_updated"],
+            ["remove", "_ts"],
+            ["remove", "part_num"]
+          ]
+        }
+      }]
+  },
+  {
+	"_id": "ais_ships_with_location",
+	"type": "pipe",
+	"source": {
+		"type": "dataset",
+        "dataset": "ais_ships"
+	},
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "All reported vessels and their last know locations",
+        "dataset": "ais_ships",
+        "transforms": {
+            "default": [
+                ["copy", "*"],
+                ["add", "_id", ["string", "_S.mmsi"]],
+                ["add", "last-seen-at", ["last", ["sorted", "_.when", ["apply-hops", "apply-last-seen", {
+                    "datasets": ["ais_position_reports_nearest_place a"],
+                    "where": [
+                      ["eq", "_S.mmsi", "a.mmsi"]
+                    ]
+                  }]]]
+                ]
+            ],
+            "apply-last-seen": [
+               ["rename", "_id", "record_id"],
+               ["copy", "status_text"],
+               ["copy", "when"],
+               ["copy", "position"],
+               ["copy", "lat"],
+               ["copy", "lon"]
+            ]
+        }
+    }]
+  }
+]

@@ -1,0 +1,45 @@
+=====================
+Nearest place service
+=====================
+
+A python micro service template for transforming a JSON entity stream. This service is designed to be used with the `HTTP transform <https://docs.sesam.io/configuration.html#the-http-transform>`_ in a Sesam service instance. 
+The service will add the nearest (posta)l place to the entity in a ``nearest_place`` property, given the entity has properties ``lat`` and ``lon``. If the input entity
+does not have ``lat``/``lon`` properties, the transform does nothing (i.e. returns the entity unchanged).
+
+The added ``nearest_place`` property includes the postal code, distance (in km) and relative compass direction to the entity from the position of the nearest place (i.e. "N", "W", "NE", "SSE" and so on).
+The service must be bootstrapped with the places to search in a json file:
+
+::
+
+  $ python3 service/transform-service.py service/places.json
+   * Running on http://0.0.0.0:5001/ (Press CTRL+C to quit)
+   * Restarting with stat
+   * Debugger is active!
+   * Debugger pin code: 260-787-156
+
+The service listens on port 5001.
+
+JSON entities can be posted to 'http://localhost:5001/transform'. The result is streamed back to the client.
+
+
+Examples:
+
+::
+
+   $ curl -s -XPOST 'http://localhost:5001/transform' -H "Content-type: application/json" -d '[{ "_id": "jane", "name": "Jane Doe", "lat": 123456, "lon": 456787 }]' | jq -S .
+   [
+     {
+       "_id": "jane",
+       "lat": 123456,
+       "lon": 456787,
+       "name": "Jane Doe",
+       "nearest_postal_place": {
+            "postal_code": "4015",
+            "name": "Stavanger",
+            "distance": 123.0,
+            "direction": "NNW"
+        }
+     }
+   ]
+
+Note that the example uses `curl <https://curl.haxx.se/>`_ to send the request and `jq <https://stedolan.github.io/jq/>`_ prettify the response.

@@ -1,0 +1,2 @@
+libais==0.16
+requests==2.10.0
