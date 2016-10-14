@@ -459,7 +459,7 @@ As mentioned earlier, from a previous project I had a datasource that had lat lo
 in Norway (http://www.erikbolstad.no/geo/noreg/postnummer). I wanted to integrate the positional AIS messages with
 this data so I could get a more "human" location in addition to the pure numeric lat lon coordinates in these messages.
 
-I had seen apps earlier which gave relative distances to nearby places, which I though was a pretty neat idea - so how do I
+I had seen apps earlier which gave relative distances to nearby places, which I though was a nice touch - so how do I
 replicate this functionality?
 
 There are currently no geo functionality in Sesam so to do these kinds of things effectively I would have to do this
@@ -467,7 +467,7 @@ outside Sesam. Sesam has a neat mechanism for exactly this sort of thing; the ``
 (https://docs.sesam.io/configuration.html#the-http-transform).
 
 The HTTP transform will send a stream of entities by HTTP to an external service for processing and consume the result
-for further processing in Sesam. Exactly what I need! I created a ``nearest-place-service`` HTTP transform service in
+for further processing in Sesam. Exactly what I needed! I created a ``nearest-place-service`` HTTP transform service in
 python which you can find in the checked out github repository I mentioned earlier. You can run the service either locally
 or in Docker, see its README file for the details.
 
