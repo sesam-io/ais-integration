@@ -96,9 +96,7 @@ def receiver():
         yield "]"
 
     # get entities from request
-    print(request)
     entities = request.get_json()
-    print(entities)
 
     # create the response
     return Response(generate(entities), mimetype='application/json')
