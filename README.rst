@@ -232,7 +232,7 @@ separation and makes sure we have both parts of this type of messages, even if t
 So, now we have AIS messages in Sesam - and in less than an hour of work, including googling+research! Yay!
 
 After having run the service for a while, I noticed that the number of messages processed and the number
-of entities stored in the ``ais_data`` dataset was diverging quite a lot, almost to a scale of 1:10.
+of entities stored in the ``ais_data`` dataset was diverging quite a lot, almost to a 10:1 ratio.
 It turns out that a lot of the messages received are duplicates, either because they are rebroadcast by others
 or being received by multiple AIS transponders. Another source of duplicates is transmitting the same position
 over and over when not moving. Finally, there are a static messages (types ``5`` and ``24``) that are retransmitted
