@@ -235,15 +235,21 @@ Extracting lists of ships
 =========================
 
 One of the goals for this little R&D project was to accumulate a list of all ships reporting through AIS messages,
-and being able to search these using Elasticsearch. To do this, we need to pay attention to AIS messages of type
-``5`` and ``24``. I have yet to see any type ``5`` messages, so I decided to ignore these for now. These types of
-messages contain information about ship name and callsign, plus additional metadata about
+and being able to search these using Elasticsearch. To do this, I just needed to pay attention to AIS messages of type
+``5`` and ``24``. As I didn't see any type ``5`` messages, even after several hours of recording, I decided to ignore
+them for now.
+
+These types of messages contain information about ship name and callsign, plus additional metadata about
 ship dimensions. The messages are static, meaning they don't change over time (unless the ship is renamed or rebuilt).
+
 I found out earlier that these messages are two-part messages and that we have no way of knowing when (or if) these
 parts arrive on the wire. Ideally, I'd like to have a single message to deal with so to do this I created two
 new datasets to hold ``part A`` and ``part B`` messages respectively, and a third dataset where these are merged into a
-single entitiy (if there indeed is more than one part!). These pipes both source from the main ``ais_data`` dataset that
+single entity (if there indeed is more than one part!).
+
+These pipes both source from the main ``ais_data`` dataset that
 contains all the messages and contain a DTL transform that filters out the entities based on type and part number.
+
 Here's the pipe for extracting type ``24``, first part messages:
 
 ::
@@ -274,17 +280,20 @@ Here's the pipe for extracting type ``24``, first part messages:
     }]
   }
 
-Note that in these datasets there is only a single type of message so I can collapse the ``_id`` property back to a
-single ``mmsi`` value again. This will also help when merging them later.
+Noting that in these datasets there is only a single type of message, I could collapse the ``_id`` property back to a
+single ``mmsi`` value again. This would also help when merging them later.
 
 The pipe for ``part B`` messages is identical to the one above, except for filtering on ``part_num`` values of ``1``.
-Now, to get a single merged entity for these messages I need a pipe with a ``merge_dataset`` source
-(https://docs.sesam.io/configuration.html#the-merge-datasets-source). Using its ``all`` strategy setting, it will read
-one or more datasets and add entities with equal ``_id`` values as children of the (otherwise empty) output entity.
-The keys of these children match the ``_id`` of the dataset they came from, making it easy to add a DTL transform to
-"flatten" these into the parent entity. In this case, the part A and part B messages don't share any properties (or rather,
-the shared properties have the same values, such as ``mmsi``) so we can simply use the DTL ``merge`` function to
-create a unified entity containing all properties from the children:
+Now, to get a single merged entity for these messages I needed a pipe with a ``merge_dataset`` source
+(https://docs.sesam.io/configuration.html#the-merge-datasets-source).
+
+Using its ``all`` strategy setting, it reads one or more datasets and add entities with equal ``_id`` values as
+children of the (otherwise empty) output entity. The keys of these children match the ``_id`` of the dataset they came
+from, making it easy to add a DTL transform to "flatten" these into the parent entity.
+
+In my usecase, the part A and part B messages don't share any properties (or rather, the shared properties have the
+same values, such as ``mmsi``) so we can simply use the DTL ``merge`` function to create a unified entity containing
+all properties from the children:
 
 ::
 
@@ -313,17 +322,19 @@ create a unified entity containing all properties from the children:
       }]
   }
 
-At the end we can remove ``part_num`` property as it is no longer needed.
+At the end I just remove tre ``part_num`` property as it's no longer needed.
 
 When googling for other infomation, I stumbled upon a neat site on the web which apparently contains all known vessels
 with public ``mmsi`` values, so I added a constructed URL to the site for fun (see http://www.marinetraffic.com).
+
 It contains some extra stuff like images of the ship (or class of ship) if available, which is also pretty nice.
 Surprisingly - at least to me - it seems to contain images of most of the ships around the norwegian coast as well,
 even small fishing vessels.
 
-Now we have a accumulated list of ships reporting in via the norwegian AIS network in the ``ais_ships`` dataset.
-I've been running the service for a few days, and the number seems to quickly grow to around 2k and slowly increase
-from there.
+Now my Sesam instance contained an accumulated list of ships reporting in via the norwegian AIS network in the ``ais_ships``
+dataset. I've since been running the service for a few days, and the number seems to quickly grow to around 2k and slowly increase
+from there. I guess there is about 2k ship in Norwegian waters at any single point in time, at least according to
+this AIS stream (which probably is filtered, more on that later).
 
 Adding the last reported location to the ships dataset
 ======================================================
