@@ -379,7 +379,7 @@ matching informaton from this new dataset, picking the newest of the location re
 The reason I chose to do this in a separate dataset is that I wanted the entities in this dataset to be automatically
 updated when a new related position report arrives, using Sesams cache-invalidation algorithm. To do this,
 I used the DTL ``hops`` "join" function. It joins the current entity with a matching entity in another dataset, which is
-very nice, but it also tracks this fact behind the scenes so any relecvant changes in the joined dataset will trigger a
+very nice, but it also tracks this fact behind the scenes so any relevant changes in the joined dataset will trigger a
 automatic retransform of the dependent entity. Which is fantastic! Here's how I did it:
 
 ::
@@ -458,13 +458,19 @@ Adding "human" poisitonal information to AIS positional entities
 As mentioned earlier, from a previous project I had a datasource that had lat lon coordinates for all postal places
 in Norway (http://www.erikbolstad.no/geo/noreg/postnummer). I wanted to integrate the positional AIS messages with
 this data so I could get a more "human" location in addition to the pure numeric lat lon coordinates in these messages.
-I've seen apps earlier which gave relative distances to nearby places, which I though was a neat idea - so how do I
-replicate this functionality? There are currently no geo functionality in Sesam so to do these kinds of things effectively
-I would have to do this outside Sesam. Sesam has a neat mechanism for exactly this sort of thing; the ``HTTP transform``
-(https://docs.sesam.io/configuration.html#the-http-transform). The HTTP transform will send a stream of entities by
-HTTP to an external service for processing and consume the result for further processing in Sesam. Exactly what I need!
-I created a ``nearest-place-service`` HTTP transform service in python which you can find in the checked out github repository
-I mentioned earlier. You can run the service either locally or in Docker, see its README file for the details.
+
+I had seen apps earlier which gave relative distances to nearby places, which I though was a pretty neat idea - so how do I
+replicate this functionality?
+
+There are currently no geo functionality in Sesam so to do these kinds of things effectively I would have to do this
+outside Sesam. Sesam has a neat mechanism for exactly this sort of thing; the ``HTTP transform``
+(https://docs.sesam.io/configuration.html#the-http-transform).
+
+The HTTP transform will send a stream of entities by HTTP to an external service for processing and consume the result
+for further processing in Sesam. Exactly what I need! I created a ``nearest-place-service`` HTTP transform service in
+python which you can find in the checked out github repository I mentioned earlier. You can run the service either locally
+or in Docker, see its README file for the details.
+
 Note that the IP address and port of the running service must be inserted into the Sesam configuration file before you
 upload it to your Sesam service.
 
