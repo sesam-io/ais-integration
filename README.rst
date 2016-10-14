@@ -378,9 +378,9 @@ Armed with this information, I decided to add a new dataset that joins my ships 
 matching informaton from this new dataset, picking the newest of the location report messages for the join.
 The reason I chose to do this in a separate dataset is that I wanted the entities in this dataset to be automatically
 updated when a new related position report arrives, using Sesams cache-invalidation algorithm. To do this,
-I used the DTL ``hops`` join function. It joins the current entity with a matching entity in another dataset, which is
-very nice, but it also tracks this fact behind the scenes so any changes in the joined entities will trigger a
-retransform of the dependent entity. Which is fantastic! Here's how I did it:
+I used the DTL ``hops`` "join" function. It joins the current entity with a matching entity in another dataset, which is
+very nice, but it also tracks this fact behind the scenes so any relecvant changes in the joined dataset will trigger a
+automatic retransform of the dependent entity. Which is fantastic! Here's how I did it:
 
 ::
 
