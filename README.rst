@@ -729,7 +729,10 @@ I also added the new computed properties ``when`` and ``position``. Resetting th
 Sweet. Now I had all I wanted to put into Elasticsearch. At this point I had spent most of one afternoon to get to
 this point, perhaps 3 or 4 hours. Not too shabby!
 
-Th next day I set up Elasticsearch by pulling its official Docker image:
+Searching the processed AIS data with Elasticsearch
+===================================================
+
+The next morning I set up Elasticsearch by pulling its official Docker image:
 
 ::
 
