@@ -87,7 +87,7 @@ The AIS microservice
 --------------------
 
 The microservice for reading Sesam data resides in the ``ais-service`` subfolder. You can either run it via Docker or as a local python service
-in a ``virtualenn`` environment (python3 required) - see the README file for details.
+in a ``virtualenv`` environment (python3 required) - see the README file for details.
 
 AIS messages are in a relatively obscure 6-bit ASCII format containing bitpacked structures of various lengths, Fortunately, we don't have to decode these ourselves.
 The microservice uses the ``libais`` module that is available at https://github.com/schwehr/libais to do the nitty-gritty details of parsing AIS messages.
