@@ -6,7 +6,8 @@ A python micro service template for transforming a JSON entity stream. This serv
 The service will add the nearest (posta)l place to the entity in a ``nearest_place`` property, given the entity has properties ``lat`` and ``lon``. If the input entity
 does not have ``lat``/``lon`` properties, the transform does nothing (i.e. returns the entity unchanged).
 
-The added ``nearest_place`` property includes the postal code, distance (in km) and relative compass direction to the entity from the position of the nearest place (i.e. "N", "W", "NE", "SSE" and so on).
+The added ``nearest_place`` property includes the bearing (in degrees where 0 is North), postal code, distance (in meters) and relative 16-point compass
+direction to the entity from the position of the nearest place (i.e. "N", "W", "NE", "SSE" and so on). The bearing and direction are relative from nearest place (i.e. "3 km NNE of some-place").
 The service must be bootstrapped with the places to search in a json file.
 
 Running locally in a virtual environment
@@ -50,22 +51,25 @@ Examples:
 
 ::
 
-   $ curl -s -XPOST 'http://localhost:5001/transform' -H "Content-type: application/json" -d '[{ "_id": "jane", "name": "Jane Doe", "lat": 123456, "lon": 456787 }]' | jq -S .
-   [
-     {
-       "_id": "jane",
-       "lat": 123456,
-       "lon": 456787,
-       "name": "Jane Doe",
-       "nearest_place": {
-            "postal_code": "4015",
-            "name": "Stavanger",
-            "bearing": 340.0,
-            "distance": 123.0,
-            "direction": "NNW"
+   $ curl -s -XPOST 'http://localhost:5001/transform' -H "Content-type: application/json" -d '[{ "_id": "jane", "name": "Jane Doe", "lat": 58.995903, "lon": 10.082722}]' | jq -S .
+    [
+      {
+        "_id": "jane",
+        "lat": 58.995903,
+        "lon": 10.082722,
+        "name": "Jane Doe",
+        "nearest_place": {
+          "bearing": 170.2446453605429,
+          "direction": "SSE",
+          "distance": 3963.305464313277,
+          "lat": 59.030966,
+          "lon": 10.071019,
+          "name": "Larvik",
+          "postal_code": "3260"
         }
-     }
-   ]
+      }
+    ]
+
 
 Note that the example uses `curl <https://curl.haxx.se/>`_ to send the request and `jq <https://stedolan.github.io/jq/>`_ prettify the response.
 
