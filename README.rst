@@ -231,6 +231,17 @@ Stopping the microservice, deleting the dataset in Sesam and then restarting the
 separation and makes sure we have both parts of this type of messages, even if they don't come in sequence (or at all).
 So, now we have AIS messages in Sesam - and in less than an hour of work, including googling+research! Yay!
 
+After having run the service for a while, I noticed that the number of messages processed and the number
+of entities stored in the ``ais_data`` dataset was diverging quite a lot, almost to a scale of 1:10.
+It turns out that a lot of the messages received are duplicates, either because they are rebroadcast by others
+or being received by multiple AIS transponders. Another source of duplicates is transmitting the same position
+over and over when not moving. Finally, there are a static messages (types ``5`` and ``24``) that are retransmitted
+fairly often and those doesn't change because they're, well, static.
+
+Sesam will only store a new version of an entity if there is any real change (i.e. its hash changes), so here Sesam clearly
+works like a efficient de-duplication engine, thus keeping the propagated upstream changes minimal. The benefit of this
+is obvious when you build chains of dependent pipes and transformations and/or push the data to a external receiver.
+
 Extracting lists of ships
 =========================
 
@@ -1008,4 +1019,3 @@ All ships named something with "viking":
 ::
 
   curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?q=shipname:viking*&pretty=true
-
