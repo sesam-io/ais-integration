@@ -1024,7 +1024,7 @@ Final notes
 ===========
 
 Playing around a bit more with the Elasticsearch index and comparing it to the map service that the original article was
-actually about, I quickly started to notice that some of the ships didn't turn up in my index. In fact, none of them did.
+actually about (http://kart.kystverket.no), I quickly started to notice that some of the ships didn't turn up in my index. In fact, none of them did.
 And, on closer inspection, vice versa.
 
 It turns out that the AIS service I'm reading from contain no ships longer than 40 meters, and the public service seem
