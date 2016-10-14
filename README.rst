@@ -635,7 +635,7 @@ my HTTP transform, which adds the ``nearest_place`` child entity to them. The se
 data was computed, so I added the current time in the ``when`` property.
 
 Shockingly, pressing "start" on the ``ais_position_reports_nearest_place`` pipe in the Sesam GUI resulted in zero errors
-and a new ``ais_position_reports_nearest_place`` appeared, containing exacly what I wanted!
+and a new ``ais_position_reports_nearest_place`` dataset appeared, containing exacly what I wanted!
 
 This kind of thing always leaves me deeply suspicious, but inspecting the produced entities confirmed that the result was indeed as intended:
 
