@@ -240,7 +240,7 @@ fairly often and those doesn't change because they're, well, static.
 
 Sesam will only store a new version of an entity if there is any real change (i.e. its hash changes), so here Sesam clearly
 works like a efficient de-duplication engine, thus keeping the propagated upstream changes minimal. The benefit of this
-is obvious when you build chains of dependent pipes and transformations and/or push the data to a external receiver.
+is obvious if you want to build chains of dependent pipes and transformations and/or push the data to a external receiver.
 
 Extracting lists of ships
 =========================
@@ -1019,3 +1019,20 @@ All ships named something with "viking":
 ::
 
   curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?q=shipname:viking*&pretty=true
+
+Final notes
+===========
+
+Playing around a bit more with the Elasticsearch index and comparing it to the map service that the original article was
+actually about, I quickly started to notice that some of the ships didn't turn up in my index. In fact, none of them did.
+And, on closer inspection, vice versa.
+
+It turns out that the AIS service I'm reading from contain no ships longer than 40 meters, and the public service seem
+to contain no ships *shorter* than 40 meters. Not sure why Kystverket have decided to separate the data like this, but
+I can only assume the "full" AIS feed you can get if your application for access is granted contains all sizes.
+
+Later on, when I find the time and inspiration, I plan to experiment with adding additional ship data via another HTTP
+transform microservice, based on the publicly available Skipsregister search page (https://www.sjofartsdir.no/skipssok/)
+made by another governmental agency The Norwegian Maritime Authority (norwegian: Sjøfartsdirektoratet). Peeking
+behind the scenes on that web page reveals calls to a REST API talking JSON, using a query vocabulary that looks similar
+to the properties in the AIS messages.
