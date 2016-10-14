@@ -12,10 +12,6 @@ Synopsis
 
     usage: ais-service [-h] [--url SERVER] [--sesam-url SESAM_HTTP_SOURCE_ENDPOINT]
 
-    Virtuoso index checker
-
-    optional arguments:
-
 
 Running in Docker
 -----------------

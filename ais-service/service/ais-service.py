@@ -32,7 +32,6 @@ def main():
     s.connect((options.ais_server, int(options.ais_port)))
 
     f = s.makefile()
-    part_cache = {}
     i = 0
 
     try:
