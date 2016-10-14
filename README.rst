@@ -518,6 +518,7 @@ entities.
 To find the nearest place to a particular lat lon position, I can simply call:
 
 ::
+
     tree_node, dist = tree.search_nn((entity_lat, entity_lon))
     place_info = tree_node.place
 
@@ -526,8 +527,8 @@ Simple!
 Computing bearing
 -----------------
 
-Now, to compute the other values I wanted turned out to be a little more involved. To compute distances between
-lat, lon pairs you have to simplyfy the earth as a sphere (so called "great circle" approximations) and use spherical
+Now, to compute the other values I wanted turned out to be a little more involved. To compute the direction between
+lat, lon pairs you have to simplify the earth to a sphere (so called "great circle" approximations) and use spherical
 trignometry using ``Haversine`` formulae (https://en.wikipedia.org/wiki/Haversine_formula). After a bit of trial and
 error I must admit I ended up on Stackoverflow to get the correct soluton:
 
