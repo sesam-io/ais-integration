@@ -492,14 +492,16 @@ The naive approach to finding the nearest place to a given lat lon point would b
 places and sort it. Even with small datasets this would be very slow indeed, so I didn't even attempt this approach.
 A quick google for spatial lookup/serarching gave me a better solution to the problem, a K-D tree (https://en.wikipedia.org/wiki/K-d_tree).
 
-The K-D tree (or KD-tree) is a spatial division data structure that partitions all input points into sets using
+The K-D tree (or KD-tree) is a binary spatial division data structure that partitions all input points into sets using
 n-dimensional planes (i.e. lines in my case where we only have 2d coordinates) and organise these into a tree. This
-makes it very easy and efficient to query for things such as neighboring points.
+makes it very easy and efficient to query for things such as neighboring points; any point is either on one one or the
+other side of a given plane (line), giving us in essence a binary search pattern.
 
 However, while the basic algorithm is fairly straightforward to implement, there is quite a bit of corner cases and
 things that made me hesitant to spend too much time on this myself. Fortunately, python comes to the rescue again!
-Pythons library of premade modules for all kinds of processing is awesome, including it turns out, constructing and
-quering KD trees. In fact, there are many implementations available so after a short review of the most popular ones
+
+Pythons library of premade modules for all kinds of processing is awesome, including, it turns out, constructing and
+quering KD trees! In fact, there are many implementations available so after a short review of the most popular ones
 I picked the basic ``kdtree`` module (https://pypi.python.org/pypi/kdtree). Its API is really simple, so to read the
 places into a KD tree structure:
 
