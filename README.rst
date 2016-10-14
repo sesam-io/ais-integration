@@ -551,8 +551,7 @@ Computing directons
 -------------------
 
 I wanted the bearing also in a more human friendly compass form, more specifically in the 16-point form (https://en.wikipedia.org/wiki/Points_of_the_compass#16-wind_compass_rose).
-The ``bearing`` value 0 is North with East at 90 degrees, South at 180 and West at 270, so this is a simple partiton of the circle
- by degress:
+The ``bearing`` value 0 is North with East at 90 degrees, South at 180 and West at 270, so this is a simple partiton of the circle by degress:
 
 ::
 
@@ -564,13 +563,16 @@ Computing distance
 ------------------
 
 Computing the approximate distance between two lat lon pairs turned out to be *much* more complex than I anticipated.
- Annoyingly, the earth is not a perfect sphere, and over larger distances the error introduced by assuming so is big
- enough to make a large difference. Over the years many have grappled with this problem and come up with various
- approximations to the true distance. In 1975, a clever polish guy called Thaddeus Vincenty came up with a set
- of formulae that represents one of the best efforts yet; its accuracy is on the sub-millimeter range - thats good
- enough for me! Again python's vast library of modules saved me from a surely error-prone effort of implementing
- this myself, so using the geopy library (https://github.com/geopy/geopy) I can simply call its built-in ``vincenty``
- implementation, which takes two (lat, lon) pair as input:
+Annoyingly, the earth is not a perfect sphere, and over larger distances the error introduced by assuming so is big
+enough to make a large difference.
+
+Over the years many have grappled with this problem and come up with various approximations to the true distance.
+In 1975, a clever polish guy called Thaddeus Vincenty came up with a set of formulae that represents one of the best
+efforts yet; its accuracy is on the sub-millimeter range - surely that's good enough for me!
+
+Again python's vast library of modules saved me from a surely error-prone effort of implementing
+this myself, so using the geopy library (https://github.com/geopy/geopy) I can simply call its built-in ``vincenty``
+implementation, which takes two (lat, lon) pair as input:
 
 
 ::
@@ -627,14 +629,15 @@ Then I added the pipe:
     ]
   }
 
-Note that there is in fact *two* transform on this pipe. The first sends the entities from the source dataset through
+Note that there is in fact *two* transforms on this pipe. The first sends the entities from the source dataset through
 my HTTP transform, which adds the ``nearest_place`` child entity to them. The second one adds two new properties. The first,
 ``position``, is a computed string on the form "xx km <DIR> of Place". Finally I wanted to have an idea of when this
 data was computed, so I added the current time in the ``when`` property.
 
-Shockinkly, pressing "start" on the ``ais_position_reports_nearest_place`` pipe in Sesams GUI resulted in no errors
-and a new ``ais_position_reports_nearest_place`` containing exacly what I wanted! This kind of thing always leaves
- me deeply suspicious, but inspecting the produced entities confirmed that the result is indeed correct:
+Shockingly, pressing "start" on the ``ais_position_reports_nearest_place`` pipe in the Sesam GUI resulted in zero errors
+and a new ``ais_position_reports_nearest_place`` appeared, containing exacly what I wanted!
+
+This kind of thing always leaves me deeply suspicious, but inspecting the produced entities confirmed that the result was indeed as intended:
 
 ::
 
@@ -715,7 +718,7 @@ new dataset instead:
     }]
   }
 
-I also added the new computed properties ``when`` and ``position``. Resetting the pipe and restarting it yielded:
+I also added the new computed properties ``when`` and ``position``. Resetting the pipe and restarting it now yielded:
 
 ::
 
@@ -747,19 +750,19 @@ I also added the new computed properties ``when`` and ``position``. Resetting th
    }
 
 Sweet. Now I had all I wanted to put into Elasticsearch. At this point I had spent most of one afternoon to get to
-this point, perhaps 3 or 4 hours. Not too shabby!
+this point, perhaps 3 or 4 hours in total. Not too shabby!
 
 Searching the processed AIS data with Elasticsearch
 ===================================================
 
-The next morning I set up Elasticsearch by pulling its official Docker image:
+The next morning I qauickly set up Elasticsearch by pulling its official Docker image:
 
 ::
 
   docker pull elasticsearch
   docker run --name elasticsearch -p 9200:9200 -p 9300:9300 -d elasticsearch
 
-To be able to talk to it from Sesam, I also needed the IP address:
+To be able to talk to it from Sesam, I also needed its IP address:
 
 ::
 
@@ -823,13 +826,14 @@ To index the ships in Sesam, I set up a ``Elasticsearch`` system in the Sesam co
   }
 
 Looking at the original entities in the ``ais_ships_with_location`` dataset, I decided to strip away a lot of the
-properties that didn't seem relevant. I also decided to rename some of them to more friendly names. Additionally,
-I computed the real ``width`` and ``length`` dimensions of the ship from the various ``to_`` parts, which I though
+properties that didn't seem relevant.
+
+I also decided to rename some of them to more friendly names. Additionally, I computed the real ``width`` and ``length`` dimensions of the ship from the various ``to_`` parts, which I though
 was less confusing. Finally, I added the ``lat`` and ``lon`` coordinates from the ``last-seen-at`` child entity as
 a single ``location`` object with only ``lat`` and ``lon`` keys, which Elasticsearch can grok.
 
 To make Elasticsearch understand the shape of the documents I was going to post to it, I created a JSON schema
-for these entities:
+for the properties generated:
 
 ::
 
@@ -852,8 +856,9 @@ for these entities:
      }
    }
 
-You can find it under the ``elasticsearch`` subfolder in the repo as ``ships.json``. I then created a ``ships``
-index with this definition by using ``curl`` to post to my Elasticsearch instance:
+You can find it under the ``elasticsearch`` subfolder in the repo as ``ships.json``.
+
+I then created a ``ships`` index with this definition by using ``curl`` to post to my Elasticsearch instance:
 
 ::
 
@@ -898,15 +903,17 @@ Deciding to test this bold claim, I googled a bit on Elasticsearch and its geose
    }
 
 I got the ``lat`` and ``lon`` test coordinates by opening google maps and picking a random point in the Oslo harbour
-area. According to the tutorial I found, this query should give me all documents with a ``location`` value within
-5 kilometers from the search parameter, and sort it on the distance to the same point. Savng the file as ``near_oslo.json``
+area.
+
+According to the tutorial I found, this query should give me all documents with a ``location`` value within
+5 kilometers from the search parameter, and sort it on the distance to the same point. Saving the file as ``near_oslo.json``
 I executed the query against my index using ``curl``:
 
 ::
 
    curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?pretty=true' -d @near_oslo.json
 
-The pipe's claim turned out to check out - the query returned the following result (I clipped it a bit to shorten
+So the pipe's claim turned out to check out! The query returned the following result (I clipped it a bit to shorten
 the output):
 
 ::
