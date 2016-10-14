@@ -234,12 +234,748 @@ So, now we have AIS messages in Sesam - and in less than an hour of work, includ
 Extracting lists of ships
 =========================
 
-We would like to have a list of which ships we've seen in our search index. To do this, we have
+One of the goals for this little R&D project was to accumulate a list of all ships reporting through AIS messages,
+and being able to search these using Elasticsearch. To do this, we need to pay attention to AIS messages of type
+``5`` and ``24``. I have yet to see any type ``5`` messages, so I decided to ignore these for now. These types of
+messages contain information about ship name and callsign, plus additional metadata about
+ship dimensions. The messages are static, meaning they don't change over time (unless the ship is renamed or rebuilt).
+I found out earlier that these messages are two-part messages and that we have no way of knowing when (or if) these
+parts arrive on the wire. Ideally, I'd like to have a single message to deal with so to do this I created two
+new datasets to hold ``part A`` and ``part B`` messages respectively, and a third dataset where these are merged into a
+single entitiy (if there indeed is more than one part!). These pipes both source from the main ``ais_data`` dataset that
+contains all the messages and contain a DTL transform that filters out the entities based on type and part number.
+Here's the pipe for extracting type ``24``, first part messages:
+
+::
+
+  {
+    "_id": "ais_static_part_A",
+    "type": "pipe",
+    "source": {
+        "type": "dataset",
+        "dataset": "ais_data"
+    },
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "All unique reported vessel names (type 24), part A",
+        "dataset": "ais_data",
+        "transforms": {
+            "default": [
+                ["filter", ["and",
+                             ["eq", "_S.part_num", 0],
+                             ["eq", "_S.type", 24]
+                           ]
+                ],
+                ["copy", "*"],
+                ["add", "_id", ["string", "_S.mmsi"]]
+            ]
+        }
+    }]
+  }
+
+Note that in these datasets there is only a single type of message so I can collapse the ``_id`` property back to a
+single ``mmsi`` value again. This will also help when merging them later.
+
+The pipe for ``part B`` messages is identical to the one above, except for filtering on ``part_num`` values of ``1``.
+Now, to get a single merged entity for these messages I need a pipe with a ``merge_dataset`` source
+(https://docs.sesam.io/configuration.html#the-merge-datasets-source). Using its ``all`` strategy setting, it will read
+one or more datasets and add entities with equal ``_id`` values as children of the (otherwise empty) output entity.
+The keys of these children match the ``_id`` of the dataset they came from, making it easy to add a DTL transform to
+"flatten" these into the parent entity. In this case, the part A and part B messages don't share any properties (or rather,
+the shared properties have the same values, such as ``mmsi``) so we can simply use the DTL ``merge`` function to
+create a unified entity containing all properties from the children:
+
+::
+
+  {
+    "_id": "ais_ships",
+    "type": "pipe",
+    "source": {
+        "type": "merge_datasets",
+        "datasets": ["ais_static_part_A", "ais_static_part_B"],
+        "strategy": "all"
+    },
+    "transform": [
+      {
+        "type": "dtl",
+        "name": "All unique reported vessel names (type 24, merged part A and B)",
+        "transforms": {
+          "default": [
+            ["merge", "_S.ais_static_part_A"],
+            ["merge", "_S.ais_static_part_B"],
+            ["add", "url", ["concat", ["list", "https://www.marinetraffic.com/en/ais/details/ships/", ["string", "_T.mmsi"]]]],
+            ["remove", "_updated"],
+            ["remove", "_ts"],
+            ["remove", "part_num"]
+          ]
+        }
+      }]
+  }
+
+At the end we can remove ``part_num`` property as it is no longer needed.
+
+When googling for other infomation, I stumbled upon a neat site on the web which apparently contains all known vessels
+with public ``mmsi`` values, so I added a constructed URL to the site for fun (see http://www.marinetraffic.com).
+It contains some extra stuff like images of the ship (or class of ship) if available, which is also pretty nice.
+Surprisingly - at least to me - it seems to contain images of most of the ships around the norwegian coast as well,
+even small fishing vessels.
+
+Now we have a accumulated list of ships reporting in via the norwegian AIS network in the ``ais_ships`` dataset.
+I've been running the service for a few days, and the number seems to quickly grow to around 2k and slowly increase
+from there.
+
+Adding the last reported location to the ships dataset
+======================================================
+
+In addition to the list of ships, I also wanted to know where each ship was last located. These types of messages
+are of type ``1-3`` and ``18-19``. So, the first step was to filter out the positional messages in a separate dataset:
+
+::
+
+  {
+    "_id": "ais_position_reports",
+    "type": "pipe",
+    "source": {
+    "type": "dataset",
+      "dataset": "ais_data"
+    },
+    "transform": [
+      {
+          "type": "dtl",
+          "name": "Filter out all but position reports (type 1-3 and 18-19)",
+          "dataset": "ais_data",
+          "transforms": {
+              "default": [
+                  ["filter", ["or",
+                               ["eq", "_S.type", 1],
+                               ["eq", "_S.type", 2],
+                               ["eq", "_S.type", 3],
+                               ["eq", "_S.type", 18],
+                               ["eq", "_S.type", 19]]
+                  ],
+                  ["copy", "*"]
+              ]
+          }
+      }]
+  }
+
+This pipe is very simple, it basically picks all messages of the correct type and copies their properties to the
+``ais_position_reports`` dataset.
+
+Armed with this information, I decided to add a new dataset that joins my ships entities in ``ais_ships`` with
+matching informaton from this new dataset, picking the newest of the location report messages for the join.
+The reason I chose to do this in a separate dataset is that I wanted the entities in this dataset to be automatically
+updated when a new related position report arrives, using Sesams cache-invalidation algorithm. To do this,
+I used the DTL ``hops`` join function. It joins the current entity with a matching entity in another dataset, which is
+very nice, but it also tracks this fact behind the scenes so any changes in the joined entities will trigger a
+retransform of the dependent entity. Which is fantastic! Here's how I did it:
+
+::
+
+  {
+    "_id": "ais_ships_with_location",
+    "type": "pipe",
+    "source": {
+      "type": "dataset",
+      "dataset": "ais_ships"
+    },
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "All reported vessels and their last know locations",
+        "dataset": "ais_ships",
+        "transforms": {
+            "default": [
+                ["copy", "*"],
+                ["add", "_id", ["string", "_S.mmsi"]],
+                ["add", "last-seen-at", ["last", ["sorted", "_.when", ["apply-hops", "apply-last-seen", {
+                    "datasets": ["ais_position_reports a"],
+                    "where": [
+                      ["eq", "_S.mmsi", "a.mmsi"]
+                    ]
+                  }]]]
+                ]
+            ],
+            "apply-last-seen": [
+               ["rename", "_id", "record_id"],
+               ["copy", "status_text"],
+               ["copy", "lat"],
+               ["copy", "lon"]
+            ]
+        }
+    }]
+  }
+
+This new ``ais_ships_with_location`` dataset contains all ships with a reported location in a ``last-seen-at`` child
+entity. A random entity from this dataset looks like:
+
+::
+
+   {
+     "repeat": 0,
+     "spare": 0,
+     "callsign": "LM5504",
+     "scaled": true,
+     "device": "stdin",
+     "vendor_id": "SRTGJE)",
+     "shipname": "BLUE LADY",
+     "to_starboard": 2,
+     "url": "https://www.marinetraffic.com/en/ais/details/ships/257599050",
+     "shiptype": 37,
+     "class": "AIS",
+     "to_port": 2,
+     "to_stern": 7,
+     "to_bow": 7,
+     "type": 24,
+     "mmsi": 257599050,
+     "shiptype_text": "Pleasure Craft",
+     "last-seen-at": {
+       "record_id": "18_257599050",
+       "lat": "~f59.036705017089844",
+       "lon": "~f9.714373588562012"
+     }
+   }
+
+Not bad for a quick hack. I'm now actually quite close to what I would like to put into Elasticsearch!
+This bit of info would enable me to do geosearches. However, I also set out to add a more "human friendly" way
+to search for ship positon information, so I'm still missing that part.
 
 Adding "human" poisitonal information to AIS positional entities
 ================================================================
 
-Having successfully made AIS data available in Sesam, our next goal is
+As mentioned earlier, from a previous project I had a datasource that had lat lon coordinates for all postal places
+in Norway (http://www.erikbolstad.no/geo/noreg/postnummer). I wanted to integrate the positional AIS messages with
+this data so I could get a more "human" location in addition to the pure numeric lat lon coordinates in these messages.
+I've seen apps earlier which gave relative distances to nearby places, which I though was a neat idea - so how do I
+replicate this functionality? There are currently no geo functionality in Sesam so to do these kinds of things effectively
+I would have to do this outside Sesam. Sesam has a neat mechanism for exactly this sort of thing; the ``HTTP transform``
+(https://docs.sesam.io/configuration.html#the-http-transform). The HTTP transform will send a stream of entities by
+HTTP to an external service for processing and consume the result for further processing in Sesam. Exactly what I need!
+I created a ``nearest-place-service`` HTTP transform service in python which you can find in the checked out github repository
+I mentioned earlier. You can run the service either locally or in Docker, see its README file for the details.
+Note that the IP address and port of the running service must be inserted into the Sesam configuration file before you
+upload it to your Sesam service.
+
+The service itself uses the python ``flask`` microservice framework (http://flask.pocoo.org/) to instantiate a HTTP
+POST service running at the ``/transform`` path at a particular address and port.
+
+It accepts POST requests containing single entities or lists of entities in JSON format and will return the same
+enties in the response. If the entities contain a ``lat`` and ``lon`` property, it will locate the nearest Norwegian
+city (well, postal office) and compute the bearing, compass direction and distance to this. This information is then
+inserted into the entity in a ``nearest_place`` child entity before it is returned to the caller.
+
+The service takes the list of places to use as input on the command line (in JSON form) - I've included the geotagged
+postal office data mentioned in the repo.
+
+Proximity searching
+-------------------
+
+The naive approach to finding the nearest place to a given lat lon point would be to simply compute the distance to all
+places and sort it. Even with small datasets this would be very slow indeed, so I didn't even attempt this approach.
+A quick google for spatial lookup/serarching gave me a better solution to the problem, a K-D tree (https://en.wikipedia.org/wiki/K-d_tree).
+
+The K-D tree (or KD-tree) is a spatial division data structure that partitions all input points into sets using
+n-dimensional planes (i.e. lines in my case where we only have 2d coordinates) and organise these into a tree. This
+makes it very easy and efficient to query for things such as neighboring points.
+
+However, while the basic algorithm is fairly straightforward to implement, there is quite a bit of corner cases and
+things that made me hesitant to spend too much time on this myself. Fortunately, python comes to the rescue again!
+Pythons library of premade modules for all kinds of processing is awesome, including it turns out, constructing and
+quering KD trees. In fact, there are many implementations available so after a short review of the most popular ones
+I picked the basic ``kdtree`` module (https://pypi.python.org/pypi/kdtree). Its API is really simple, so to read the
+places into a KD tree structure:
+
+::
+
+    with open(sys.argv[1]) as inputfile:
+        for place in json.load(inputfile):
+            node = tree.add((float(place["LAT"]), float(place["LON"])))
+            node.place = place
+
+The last line is added simply so I can do a reverse look up the places dict object from query results when transforming
+entities.
+
+To find the nearest place to a particular lat lon position, I can simply call:
+
+::
+    tree_node, dist = tree.search_nn((entity_lat, entity_lon))
+    place_info = tree_node.place
+
+Simple!
+
+Computing bearing
+-----------------
+
+Now, to compute the other values I wanted turned out to be a little more involved. To compute distances between
+lat, lon pairs you have to simplyfy the earth as a sphere (so called "great circle" approximations) and use spherical
+trignometry using ``Haversine`` formulae (https://en.wikipedia.org/wiki/Haversine_formula). After a bit of trial and
+error I must admit I ended up on Stackoverflow to get the correct soluton:
+
+::
+
+  def compute_bearing(lat1, lon1, lat2, lon2):
+    lon1, lat1, lon2, lat2 = map(radians, (lon1, lat1, lon2, lat2))
+    bearing = atan2(sin(lon2-lon1)*cos(lat2), cos(lat1)*sin(lat2)-sin(lat1)*cos(lat2)*cos(lon2-lon1))
+    bearing = degrees(bearing)
+
+    return (bearing + 360) % 360
+
+It turned out I had forgotten to convert the input lat lon coordinates to radians before using the trignometric
+math functions! Doh!
+
+Humans are pretty bad at reading radians, so we convert the bearing value to degrees before
+we return it. The last line is to shift the output value into the correct 0..360 degrees range.
+
+Computing directons
+-------------------
+
+I wanted the bearing also in a more human friendly compass form, more specifically in the 16-point form (https://en.wikipedia.org/wiki/Points_of_the_compass#16-wind_compass_rose).
+The ``bearing`` value 0 is North with East at 90 degrees, South at 180 and West at 270, so this is a simple partiton of the circle
+ by degress:
+
+::
+
+  def compute_compass_direction(bearing):
+    directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+    return directions[floor(bearing/22.5)]
+
+Computing distance
+------------------
+
+Computing the approximate distance between two lat lon pairs turned out to be *much* more complex than I anticipated.
+ Annoyingly, the earth is not a perfect sphere, and over larger distances the error introduced by assuming so is big
+ enough to make a large difference. Over the years many have grappled with this problem and come up with various
+ approximations to the true distance. In 1975, a clever polish guy called Thaddeus Vincenty came up with a set
+ of formulae that represents one of the best efforts yet; its accuracy is on the sub-millimeter range - thats good
+ enough for me! Again python's vast library of modules saved me from a surely error-prone effort of implementing
+ this myself, so using the geopy library (https://github.com/geopy/geopy) I can simply call its built-in ``vincenty``
+ implementation, which takes two (lat, lon) pair as input:
 
 
+::
+
+  def compute_distance(lat1, lon1, lat2, lon2):
+    return geopy.distance.vincenty((lat1, lon1), (lat2, lon2)).meters
+
+Putting it all together
+-----------------------
+
+Now I have all I need to add to the transformed entities! The next step was to set up a pipe in Sesam to
+read the entities in the ``ais_position_reports`` dataset and use my new HTTP transform service to find the
+nearest place for the positions and pipe the result into a new dataset. First I defined the ``system`` for my
+service (in this case I'm running locally - in your case you're probably going to change the URLs in the config):
+
+::
+
+    {
+      "_id": "nearest_place",
+      "type": "system:url",
+      "base_url": "http://localhost:5001"
+    }
+
+Then I added the pipe:
+
+::
+
+  {
+    "_id": "ais_position_reports_nearest_place",
+    "type": "pipe",
+    "source": {
+		"type": "dataset",
+        "dataset": "ais_position_reports"
+    },
+    "transform": [
+      {
+          "type": "http",
+          "name": "Find out the nearest place of all unique position reports",
+          "system": "nearest_place",
+          "url": "http://localhost:5001/transform"
+      },
+      {
+          "type": "dtl",
+          "name": "Turn nearest place into a string",
+          "dataset": "ais_position_reports",
+          "transforms": {
+              "default": [
+                  ["copy", "*"],
+                  ["add", "position", ["concat", ["list", ["string", ["floor", 1, ["/", "_S.nearest_place.distance", 1000.0]]], " km ", "_S.nearest_place.direction", " of ", "_S.nearest_place.name"]]],
+                  ["add", "when", ["now"]]
+              ]
+          }
+      }
+    ]
+  }
+
+Note that there is in fact *two* transform on this pipe. The first sends the entities from the source dataset through
+my HTTP transform, which adds the ``nearest_place`` child entity to them. The second one adds two new properties. The first,
+``position``, is a computed string on the form "xx km <DIR> of Place". Finally I wanted to have an idea of when this
+data was computed, so I added the current time in the ``when`` property.
+
+Shockinkly, pressing "start" on the ``ais_position_reports_nearest_place`` pipe in Sesams GUI resulted in no errors
+and a new ``ais_position_reports_nearest_place`` containing exacly what I wanted! This kind of thing always leaves
+ me deeply suspicious, but inspecting the produced entities confirmed that the result is indeed correct:
+
+::
+
+  {
+     "repeat": 0,
+     "nearest_place": {
+       "direction": "NW",
+       "postal_code": "6475",
+       "distance": "~f541.2135566326016",
+       "lon": "~f6.6742",
+       "lat": "~f62.6738",
+       "name": "Midsund",
+       "bearing": "~f332.36777079302885"
+     },
+     "spare": 0,
+     "type": 1,
+     "accuracy": true,
+     "heading": 511,
+     "scaled": true,
+     "status": 0,
+     "sync_state": 0,
+     "second": 31,
+     "status_text": "Under way using engine",
+     "raim": true,
+     "course": 0,
+     "maneuver": 0,
+     "turn": "nan",
+     "received_stations": 29,
+     "position": "0.5 km NW of Midsund",
+     "slot_timeout": 3,
+     "speed": 0,
+     "lon": "~f6.669294834136963",
+     "when": "~t2016-10-13T10:18:23.855049984Z",
+     "lat": "~f62.6781005859375",
+     "device": "stdin",
+     "class": "AIS",
+     "mmsi": 257817500
+   }
+
+Leaving my lingering suspicions behind, I modified the original ``ais_ships_with_location`` pipe to join with this
+new dataset instead:
+
+::
+
+  {
+    "_id": "ais_ships_with_location",
+    "type": "pipe",
+    "source": {
+		"type": "dataset",
+        "dataset": "ais_ships"
+    },
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "All reported vessels and their last know locations",
+        "dataset": "ais_ships",
+        "transforms": {
+            "default": [
+                ["copy", "*"],
+                ["add", "_id", ["string", "_S.mmsi"]],
+                ["add", "last-seen-at", ["last", ["sorted", "_.when", ["apply-hops", "apply-last-seen", {
+                    "datasets": ["ais_position_reports_nearest_place a"],
+                    "where": [
+                      ["eq", "_S.mmsi", "a.mmsi"]
+                    ]
+                  }]]]
+                ]
+            ],
+            "apply-last-seen": [
+               ["rename", "_id", "record_id"],
+               ["copy", "status_text"],
+               ["copy", "when"],
+               ["copy", "position"],
+               ["copy", "lat"],
+               ["copy", "lon"]
+            ]
+        }
+    }]
+  }
+
+I also added the new computed properties ``when`` and ``position``. Resetting the pipe and restarting it yielded:
+
+::
+
+   {
+     "repeat": 0,
+     "spare": 0,
+     "callsign": "LM5504",
+     "scaled": true,
+     "device": "stdin",
+     "vendor_id": "SRTGJE)",
+     "shipname": "BLUE LADY",
+     "to_starboard": 2,
+     "url": "https://www.marinetraffic.com/en/ais/details/ships/257599050",
+     "shiptype": 37,
+     "class": "AIS",
+     "to_port": 2,
+     "to_stern": 7,
+     "to_bow": 7,
+     "type": 24,
+     "mmsi": 257599050,
+     "shiptype_text": "Pleasure Craft",
+     "last-seen-at": {
+       "record_id": "18_257599050",
+       "lat": "~f59.036705017089844",
+       "when": "~t2016-10-13T10:18:23.854389504Z",
+       "position": "1.4 km ESE of Stathelle",
+       "lon": "~f9.714373588562012"
+     }
+   }
+
+Sweet. Now I had all I wanted to put into Elasticsearch. At this point I had spent most of one afternoon to get to
+this point, perhaps 3 or 4 hours. Not too shabby!
+
+Th next day I set up Elasticsearch by pulling its official Docker image:
+
+::
+
+  docker pull elasticsearch
+  docker run --name elasticsearch -p 9200:9200 -p 9300:9300 -d elasticsearch
+
+To be able to talk to it from Sesam, I also needed the IP address:
+
+::
+
+   docker inspect -f '{{.Name}} - {{.NetworkSettings.IPAddress }}' elasticsearch
+
+In my case it was running locally and gave its IP address as ``172.17.0.2``. YMWV.
+
+To index the ships in Sesam, I set up a ``Elasticsearch`` system in the Sesam configuration and added a pipe with a
+``Elasticsearch`` sink using this system (see https://docs.sesam.io/configuration.html#the-elasticsearch-sink):
+
+::
+
+  {
+    "_id": "elasticsearch_index",
+    "type": "system:elasticsearch",
+    "hosts": ["172.17.0.2:9200"]
+  },
+  {
+    "_id": "to_elasticsearch",
+    "type": "pipe",
+    "source": {
+      "type": "dataset",
+      "dataset": "ais_ships_with_location"
+    },
+    "sink": {
+      "type": "elasticsearch",
+      "system": "elasticsearch_index",
+      "default_index": "ships",
+      "default_type": "ship"
+    },
+    "transform": [
+    {
+        "type": "dtl",
+        "name": "Transform to elasticsearch document",
+        "dataset": "ais_ships_with_location",
+        "transforms": {
+            "default": [
+                ["copy", "_id"],
+                ["copy", "mmsi"],
+                ["add", "length", ["+", "_S.to_stern", "_S.to_bow"]],
+                ["add", "width", ["+", "_S.to_port", "_S.to_starboard"]],
+                ["copy", "vendor_id"],
+                ["copy", "callsign"],
+                ["copy", "shipname"],
+                ["copy", "url"],
+                ["rename", "status_text", "status"],
+                ["rename", "shiptype_text", "shiptype"],
+                ["merge", ["apply", "apply-last-seen", "_S.last-seen-at"]]
+            ],
+            "apply-last-seen": [
+                ["copy", "*"],
+                ["add", "location", ["dict", ["list",
+                                                ["list", "lat", "_S.lat"],
+                                                ["list", "lon", "_S.lon"]]
+                ]],
+                ["remove", "lat"],
+                ["remove", "lon"]
+            ]
+        }
+    }]
+  }
+
+Looking at the original entities in the ``ais_ships_with_location`` dataset, I decided to strip away a lot of the
+properties that didn't seem relevant. I also decided to rename some of them to more friendly names. Additionally,
+I computed the real ``width`` and ``length`` dimensions of the ship from the various ``to_`` parts, which I though
+was less confusing. Finally, I added the ``lat`` and ``lon`` coordinates from the ``last-seen-at`` child entity as
+a single ``location`` object with only ``lat`` and ``lon`` keys, which Elasticsearch can grok.
+
+To make Elasticsearch understand the shape of the documents I was going to post to it, I created a JSON schema
+for these entities:
+
+::
+
+  {
+    "mappings": {
+      "ship": {
+        "properties": {
+          "mmsi": {"type": "integer"},
+          "callsign": {"type": "string"},
+          "shipname": {"type": "string"},
+          "length": {"type": "integer"},
+          "width": {"type": "integer"},
+          "position": {"type": "string"},
+          "when": {"type": "date"},
+          "vendor_id": {"type": "string"},
+          "url": {"type": "string"},
+          "location": {"type": "geo_point"}
+          }
+       }
+     }
+   }
+
+You can find it under the ``elasticsearch`` subfolder in the repo as ``ships.json``. I then created a ``ships``
+index with this definition by using ``curl`` to post to my Elasticsearch instance:
+
+::
+
+  curl -XPUT http://172.17.0.2:9200/ships @ships.json
+
+Elasticsearch claimed to have ``Acknowledged`` my attempt, so after uploading the new configuration to my Sesam instance
+I was thrilled to see that the ``to_elasticsearch`` pipe soon reported to have proccessed entities.
+
+Deciding to test this bold claim, I googled a bit on Elasticsearch and its geosearch support and came up with a test query:
+
+::
+
+   {
+     "sort" : [
+         {
+             "_geo_distance" : {
+                 "location" : {
+                       "lat" : 59.902006,
+                       "lon" : 10.718077
+                 },
+                 "order" : "asc",
+                 "unit" : "km"
+             }
+         }
+     ],
+     "query": {
+       "filtered" : {
+           "query" : {
+               "match_all" : {}
+           },
+           "filter" : {
+               "geo_distance" : {
+                   "distance" : "5km",
+                   "location" : {
+                       "lat" : 59.902006,
+                       "lon" : 10.718077
+                   }
+               }
+           }
+       }
+     }
+   }
+
+I got the ``lat`` and ``lon`` test coordinates by opening google maps and picking a random point in the Oslo harbour
+area. According to the tutorial I found, this query should give me all documents with a ``location`` value within
+5 kilometers from the search parameter, and sort it on the distance to the same point. Savng the file as ``near_oslo.json``
+I executed the query against my index using ``curl``:
+
+::
+
+   curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?pretty=true' -d @near_oslo.json
+
+The pipe's claim turned out to check out - the query returned the following result (I clipped it a bit to shorten
+the output):
+
+::
+
+  {
+     "took" : 104,
+     "timed_out" : false,
+     "_shards" : {
+       "total" : 5,
+       "successful" : 5,
+       "failed" : 0
+     },
+     "hits" : {
+       "total" : 27,
+       "max_score" : null,
+       "hits" : [ {
+         "_index" : "ships",
+         "_type" : "ship",
+         "_id" : "258112090",
+         "_score" : null,
+         "_source" : {
+           "when" : "2016-10-13T09:57:11.250172672Z",
+           "url" : "https://www.marinetraffic.com/en/ais/details/ships/258112090",
+           "position" : "0.2 km SE of Oslo",
+           "shiptype" : "Sailing",
+           "location" : {
+             "lat" : 59.90692138671875,
+             "lon" : 10.725051879882812
+           },
+           "record_id" : "18_258112090",
+           "length" : 14,
+           "width" : 4,
+           "callsign" : "LK9581",
+           "mmsi" : 258112090,
+           "vendor_id" : "SRTD,;=",
+           "shipname" : "VELIERO"
+         },
+         "sort" : [ 0.6698691255702985 ]
+       }, {
+         "_index" : "ships",
+         "_type" : "ship",
+         "_id" : "257831680",
+         "_score" : null,
+         "_source" : {
+           "when" : "2016-10-13T10:11:44.093045504Z",
+           "url" : "https://www.marinetraffic.com/en/ais/details/ships/257831680",
+           "position" : "0.2 km SE of Oslo",
+           "shiptype" : "Sailing",
+           "location" : {
+             "lat" : 59.90694808959961,
+             "lon" : 10.72535514831543
+           },
+           "record_id" : "18_257831680",
+           "length" : 11,
+           "width" : 4,
+           "callsign" : "LJ9980",
+           "mmsi" : 257831680,
+           "vendor_id" : "TRUEHDG",
+           "shipname" : "SOLGANG"
+         },
+         "sort" : [ 0.6821838680598435 ]
+       }
+       ..
+       } ]
+     }
+   }
+
+Mission success!
+
+I also tested out a few searches with the more "human" friendly position field:
+
+Ships near Bergen:
+
+::
+
+  curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?q=position:bergen*%20AND%20shiptype:*&pretty=true
+
+Fishingboats near Leknes (in Lofoten islands, northern Norway):
+
+::
+
+  curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?q=position:leknes*%20AND%20shiptype:fishing*&pretty=true
+
+All cargo ships seen:
+
+::
+
+  curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?q=shiptype:cargo*&pretty=true
+
+All ships named something with "viking":
+
+::
+
+  curl -XGET 'http://172.17.0.2:9200/ships/ship/_search?q=shipname:viking*&pretty=true
 
