@@ -68,7 +68,7 @@ Note that I assume you have access to a Sesam instance somewhere, and that its r
 The "complete" Sesam configuration can be found in the subfolder ``sesam-config``. I will include snippets of this config along the way to
 explain what's going on.
 
-Before you can start pushing data into Sesam, you will need to set ut a HTTP endpoint pipe connected to a dataset:
+Before you can start pushing data into Sesam, you will need to set up a HTTP endpoint pipe connected to a dataset:
 
 ::
 
