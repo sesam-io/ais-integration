@@ -108,7 +108,7 @@ We can then read messages off this stream in a loop:
    for msg in ais.stream.decode(f):
       message = ais.compatibility.gpsd.mangle(msg)
 
-Note that this loop will not end until the socker closes. The data is a live stream, so that means basically never.
+Note that this loop will not end until the socket closes. The data is a live stream, so that means basically never.
 
 The native format of ``libais`` deviates a bit in naming from the property names documented in http://catb.org/gpsd/AIVDM.html so we use a function to convert it to a more familiar ``gpsd`` format (https://en.wikipedia.org/wiki/Gpsd).
 
