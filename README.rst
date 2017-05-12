@@ -501,7 +501,7 @@ Proximity searching
 
 The naive approach to finding the nearest place to a given lat lon point would be to simply compute the distance to all
 places and sort it. Even with small datasets this would be very slow indeed, so I didn't even attempt this approach.
-A quick google for spatial lookup/serarching gave me a better solution to the problem, a K-D tree (https://en.wikipedia.org/wiki/K-d_tree).
+A quick google for spatial lookup/searching gave me a better solution to the problem, a K-D tree (https://en.wikipedia.org/wiki/K-d_tree).
 
 The K-D tree (or KD-tree) is a binary spatial division data structure that partitions all input points into sets using
 n-dimensional planes (i.e. lines in my case where we only have 2d coordinates) and organise these into a tree. This
