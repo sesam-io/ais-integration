@@ -505,7 +505,7 @@ A quick google for spatial lookup/searching gave me a better solution to the pro
 
 The K-D tree (or KD-tree) is a binary spatial division data structure that partitions all input points into sets using
 n-dimensional planes (i.e. lines in my case where we only have 2d coordinates) and organise these into a tree. This
-makes it very easy and efficient to query for things such as neighboring points; any point is either on one one or the
+makes it very easy and efficient to query for things such as neighboring points; any point is either on one or the
 other side of a given plane (line), giving us in essence a binary search pattern.
 
 However, while the basic algorithm is fairly straightforward to implement, there is quite a bit of corner cases and
@@ -538,10 +538,10 @@ Simple!
 Computing bearing
 -----------------
 
-Now, to compute the other values I wanted turned out to be a little more involved. To compute the direction between
-lat, lon pairs you have to simplify the earth to a sphere (so called "great circle" approximations) and use spherical
+Computing the other values I wanted turned out to be a little more involved. To compute the direction between
+lat, lon pairs you have to simplify the earth to a sphere (so called "great circle" approximations) and apply spherical
 trignometry using ``Haversine`` formulae (https://en.wikipedia.org/wiki/Haversine_formula). After a bit of trial and
-error I must admit I ended up on Stackoverflow to get the correct soluton:
+error (ok, failures) I must admit I ended up on Stackoverflow to get the correct solution:
 
 ::
 
@@ -552,17 +552,17 @@ error I must admit I ended up on Stackoverflow to get the correct soluton:
 
     return (bearing + 360) % 360
 
-It turned out I had forgotten to convert the input lat lon coordinates to radians before using the trignometric
+As it turned out, I had forgotten to convert the input lat lon coordinates to radians before using the trignometric
 math functions! Doh!
 
 Humans are pretty bad at reading radians, so we convert the bearing value to degrees before
-we return it. The last line is to shift the output value into the correct 0..360 degrees range.
+we return it. The last line of the code snippet is to shift the output value into the more human friendly 0..360 degrees range.
 
 Computing directons
 -------------------
 
-I wanted the bearing also in a more human friendly compass form, more specifically in the 16-point form (https://en.wikipedia.org/wiki/Points_of_the_compass#16-wind_compass_rose).
-The ``bearing`` value 0 is North with East at 90 degrees, South at 180 and West at 270, so this is a simple partiton of the circle by degress:
+I wanted the bearing also in a more "humanized" compass form, more specifically in the 16-point form (https://en.wikipedia.org/wiki/Points_of_the_compass#16-wind_compass_rose).
+The ``bearing`` value 0 is North with East at 90 degrees, South at 180 and West at 270, so this is basically a simple partiton of the circle by degress:
 
 ::
 
@@ -573,16 +573,14 @@ The ``bearing`` value 0 is North with East at 90 degrees, South at 180 and West 
 Computing distance
 ------------------
 
-Computing the approximate distance between two lat lon pairs turned out to be *much* more complex than I anticipated.
-Annoyingly, the earth is not a perfect sphere, and over larger distances the error introduced by assuming so is big
-enough to make a large difference.
+Computing the approximate distance between two lat lon pairs was *much* more complex than I anticipated.
+Annoyingly, the earth is not a perfect sphere, and over larger distances the error introduced by assuming so is increasingly bad. Bad enough to make a large difference.
 
-Over the years many have grappled with this problem and come up with various approximations to the true distance.
-In 1975, a clever polish guy called Thaddeus Vincenty came up with a set of formulae that represents one of the best
-efforts yet; its accuracy is on the sub-millimeter range - surely that's good enough for me!
+Not surprisingly, over the years many have grappled with this problem and come up with various approximations to the "true" distance. In 1975, a clever polish guy called Thaddeus Vincenty came up with a set of formulae that represents one of the best
+efforts yet; its accuracy is on the sub-millimeter range - that's good enough for me!
 
 Again python's vast library of modules saved me from a surely error-prone effort of implementing
-this myself, so using the geopy library (https://github.com/geopy/geopy) I can simply call its built-in ``vincenty``
+this myself, so using the "geopy" library (https://github.com/geopy/geopy) I can simply call its built-in ``vincenty``
 implementation, which takes two (lat, lon) pair as input:
 
 
@@ -766,7 +764,7 @@ this point, perhaps 3 or 4 hours in total. Not too shabby!
 Searching the processed AIS data with Elasticsearch
 ===================================================
 
-The next morning I qauickly set up Elasticsearch by pulling its official Docker image:
+The next morning I quickly set up Elasticsearch by pulling its official Docker image:
 
 ::
 
@@ -841,9 +839,9 @@ properties that didn't seem relevant.
 
 I also decided to rename some of them to more friendly names. Additionally, I computed the real ``width`` and ``length`` dimensions of the ship from the various ``to_`` parts, which I though
 was less confusing. Finally, I added the ``lat`` and ``lon`` coordinates from the ``last-seen-at`` child entity as
-a single ``location`` object with only ``lat`` and ``lon`` keys, which Elasticsearch can grok.
+a single ``location`` object with only ``lat`` and ``lon`` keys, which Elasticsearch can grok natively.
 
-To make Elasticsearch understand the shape of the documents I was going to post to it, I created a JSON schema
+To make Elasticsearch understand the shape of the documents I was going to post to it, I then created a JSON schema
 for the properties generated:
 
 ::
@@ -913,8 +911,7 @@ Deciding to test this bold claim, I googled a bit on Elasticsearch and its geose
      }
    }
 
-I got the ``lat`` and ``lon`` test coordinates by opening google maps and picking a random point in the Oslo harbour
-area.
+Note that I got the ``lat`` and ``lon`` test coordinates by opening google maps and just picking a random point in the Oslo harbour area.
 
 According to the tutorial I found, this query should give me all documents with a ``location`` value within
 5 kilometers from the search parameter, and sort it on the distance to the same point. Saving the file as ``near_oslo.json``
@@ -1024,14 +1021,11 @@ Final notes
 ===========
 
 Playing around a bit more with the Elasticsearch index and comparing it to the map service that the original article was
-actually about (http://kart.kystverket.no), I quickly started to notice that some of the ships didn't turn up in my index. In fact, none of them did.
-And, on closer inspection, vice versa.
+actually about (http://kart.kystverket.no), I quickly started to notice that some of the ships didn't turn up in my index. In fact, none of them did. And, on closer inspection, vice versa.
 
-It turns out that the AIS service I'm reading from contain no ships longer than 40 meters, and the public service seem
-to contain no ships *shorter* than 40 meters. Not sure why Kystverket have decided to separate the data like this, but
-I can only assume the "full" AIS feed you can get if your application for access is granted contains all sizes.
+The reason for this turns out to be that the AIS service I'm reading from contain no ships longer than 40 meters, and the public service seem to contain no ships *shorter* than 40 meters. Not sure why Kystverket have decided to separate the data like this, but I can only assume the "full" AIS feed you can get if your application for access is granted contains all sizes.
 
-Later on, when I find the time and inspiration, I plan to experiment with adding additional ship data via another HTTP
+Later on, when/if I find the time and inspiration, I plan to experiment with adding additional ship data via another HTTP
 transform microservice, based on the publicly available Skipsregister search page (https://www.sjofartsdir.no/skipssok/)
 made by another governmental agency The Norwegian Maritime Authority (norwegian: Sjøfartsdirektoratet). Peeking
 behind the scenes on that web page reveals calls to a REST API talking JSON, using a query vocabulary that looks similar
